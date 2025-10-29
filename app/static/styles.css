@@ -1,0 +1,270 @@
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #007bff;
+    --primary-hover: #0056b3;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-color: #333;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 头部 */
+.header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 30px 0;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.header h1 {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.header .subtitle {
+    font-size: 1rem;
+    color: #666;
+    font-weight: 300;
+}
+
+/* 主内容 */
+.main-content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    margin-bottom: 40px;
+}
+
+/* 面板样式 */
+.panel {
+    background: white;
+    border-radius: 8px;
+    padding: 25px;
+    box-shadow: var(--shadow);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.panel h2 {
+    font-size: 1.5rem;
+    color: var(--text-color);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* 信息网格 */
+.info-grid {
+    margin-bottom: 20px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-item label {
+    font-weight: 600;
+    color: #666;
+}
+
+.info-item span {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* 输入组 */
+.input-group {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group label {
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #666;
+    font-size: 0.95rem;
+}
+
+.input-group input {
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* 按钮样式 */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* 计算器按钮 */
+.operation-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.btn-calc {
+    background-color: var(--success-color);
+    color: white;
+    padding: 12px 15px;
+}
+
+.btn-calc:hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+/* 计算器 */
+.calculator {
+    display: flex;
+    flex-direction: column;
+}
+
+.result-box {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: var(--light-bg);
+    border-radius: 4px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.result-box label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #666;
+}
+
+.result-display {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    font-weight: bold;
+    min-height: 30px;
+}
+
+/* 消息结果 */
+.message-result {
+    margin-top: 15px;
+    padding: 12px;
+    background-color: var(--light-bg);
+    border-radius: 4px;
+    border-left: 4px solid var(--success-color);
+    display: none;
+    color: var(--success-color);
+}
+
+.message-result.show {
+    display: block;
+}
+
+/* 页脚 */
+.footer {
+    text-align: center;
+    padding: 20px;
+    border-top: 2px solid var(--border-color);
+    color: #999;
+    font-size: 0.9rem;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+
+    .header h1 {
+        font-size: 1.8rem;
+    }
+
+    .operation-buttons {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* 加载动画 */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
