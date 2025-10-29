@@ -3,87 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebView Application</title>
+    <title>Jimeng Scripts</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <!-- 头部 -->
-        <header class="header">
-            <h1>WebView 应用示例</h1>
-            <p class="subtitle">使用Python + 前端技术构建</p>
-        </header>
+        <!-- Tab导航 -->
+        <div class="tab-container">
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="switchTab(event, 'home')">首页</button>
+                <button class="tab-button" onclick="switchTab(event, 'accounts')">账号管理</button>
+                <button class="tab-button" onclick="switchTab(event, 'settings')">设置</button>
+            </div>
 
-        <!-- 主内容区 -->
-        <main class="main-content">
-            <!-- 信息面板 -->
-            <section class="panel">
-                <h2>应用信息</h2>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label>应用名称:</label>
-                        <span id="appName">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>版本:</label>
-                        <span id="appVersion">-</span>
-                    </div>
-                    <div class="info-item">
-                        <label>平台:</label>
-                        <span id="appPlatform">-</span>
+            <!-- Tab内容 -->
+            <div class="tab-content">
+                <!-- 首页 -->
+                <div id="home" class="tab-pane active">
+                    <div class="panel">
+                        <h2>欢迎使用 Jimeng Scripts</h2>
+                        <p>这是一个基于Python和WebView的应用程序。</p>
+                        <p>请使用上方的标签页导航到不同的功能区域。</p>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="loadAppInfo()">
-                    加载应用信息
-                </button>
-            </section>
 
-            <!-- 计算器面板 -->
-            <section class="panel">
-                <h2>计算器示例</h2>
-                <div class="calculator">
-                    <div class="input-group">
-                        <label for="num1">第一个数字:</label>
-                        <input type="number" id="num1" placeholder="输入数字" value="10">
-                    </div>
-
-                    <div class="input-group">
-                        <label for="num2">第二个数字:</label>
-                        <input type="number" id="num2" placeholder="输入数字" value="5">
-                    </div>
-
-                    <div class="operation-buttons">
-                        <button class="btn btn-calc" onclick="calculate('add')">加</button>
-                        <button class="btn btn-calc" onclick="calculate('subtract')">减</button>
-                        <button class="btn btn-calc" onclick="calculate('multiply')">乘</button>
-                        <button class="btn btn-calc" onclick="calculate('divide')">除</button>
-                    </div>
-
-                    <div class="result-box">
-                        <label>计算结果:</label>
-                        <div id="result" class="result-display">-</div>
+                <!-- 账号管理 -->
+                <div id="accounts" class="tab-pane">
+                    <div class="panel">
+                        <div class="form-section">
+                            <div class="table-header">
+                                <div class="table-actions">
+                                    <button class="btn btn-primary" onclick="showBatchAddModal()">批量添加</button>
+                                    <button class="btn btn-danger" onclick="deleteSelectedAccounts()" style="margin-left: 10px;">删除选中</button>
+                                    <button class="btn btn-secondary" onclick="refreshAccounts()" style="margin-left: 10px;">刷新列表</button>
+                                </div>
+                            </div>
+                            <div class="table-container">
+                                <table id="accounts-table" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
+                                            <th>ID</th>
+                                            <th>Token</th>
+                                            <th>积分</th>
+                                            <th>当日图片数</th>
+                                            <th>当日视频数</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- 账号列表将在这里动态生成 -->
+                                        <tr>
+                                            <td colspan="6" class="no-data">暂无账号数据</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- 消息面板 -->
-            <section class="panel">
-                <h2>消息通信</h2>
-                <div class="input-group">
-                    <label for="messageInput">输入消息:</label>
-                    <input type="text" id="messageInput" placeholder="输入你的消息">
+                <!-- 设置 -->
+                <div id="settings" class="tab-pane">
+                    <div class="panel">
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="api_key">API Key:</label>
+                                <input type="text" id="api_key" placeholder="请输入API Key">
+                            </div>
+                            <div class="form-group">
+                                <label for="api_proxy">API Proxy:</label>
+                                <input type="text" id="api_proxy" placeholder="例如: http://proxy.example.com:8080">
+                            </div>
+                            <div class="form-group">
+                                <label for="model">Model:</label>
+                                <input type="text" id="model" placeholder="例如: gpt-3.5-turbo">
+                            </div>
+                        </div>
+                        
+                        <div class="form-section">
+                            <div class="form-group">
+                                <label for="max_threads">最大线程数:</label>
+                                <input type="number" id="max_threads" min="1" max="50" value="5">
+                            </div>
+                            <div class="form-group">
+                                <label for="daily_video_limit">单账号单日视频数:</label>
+                                <input type="number" id="daily_video_limit" min="1" max="100" value="2">
+                            </div>
+                            <div class="form-group">
+                                <label for="daily_image_limit">单账号单日图片数:</label>
+                                <input type="number" id="daily_image_limit" min="1" max="1000" value="10">
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                        <div id="settings-message" class="message-result"></div>
+                    </div>
                 </div>
-                <button class="btn btn-primary" onclick="sendMessage()">
-                    发送消息到后端
-                </button>
-                <div id="messageResult" class="message-result"></div>
-            </section>
-        </main>
+            </div>
+        </div>
+    </div>
 
-        <!-- 页脚 -->
-        <footer class="footer">
-            <p>&copy; 2025 WebView Application. 使用 Python + HTML/CSS/JS 构建。</p>
-        </footer>
+    <!-- 批量添加账号模态框 -->
+    <div id="batch-add-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>批量添加账号</h2>
+                <span class="close" onclick="closeBatchAddModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="batch_accounts">账号Token (每行一个):</label>
+                    <textarea id="batch_accounts" rows="10" placeholder="请输入账号Token，每行一个&#10;例如:&#10;token1&#10;token2&#10;token3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeBatchAddModal()">取消</button>
+                    <button class="btn btn-primary" onclick="batchAddAccounts()">添加</button>
+                </div>
+                <div id="modal-message" class="message-result"></div>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
