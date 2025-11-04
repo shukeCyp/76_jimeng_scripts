@@ -3,6 +3,7 @@
 """
 
 import os
+from peewee import IntegerField
 import sys
 from pathlib import Path
 from peewee import *
@@ -154,8 +155,9 @@ class Config(BaseModel):
 
 # 账号模型
 class JimengAccount(BaseModel):
-    token = CharField(unique=True)
-    points = IntegerField(default=0)  # 积分
+    username = CharField(unique=True)  # 邮箱账号
+    password = CharField()    # 密码，可为空
+    cookies = TextField(null=True)     # Cookies，可为空
     created_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
     updated_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
@@ -163,7 +165,7 @@ class JimengAccount(BaseModel):
 # 记录模型
 class JimengRecord(BaseModel):
     account = ForeignKeyField(JimengAccount, backref='records')
-    type = IntegerField()  # 1代表图片，2代表视频
+    type: IntegerField = IntegerField()  # 1代表图片，2代表视频
     time = DateTimeField(default=datetime.now)
     created_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
@@ -195,7 +197,10 @@ def init_default_configs():
         {'key': 'model', 'value': '', 'description': '模型名称'},
         {'key': 'max_threads', 'value': '5', 'description': '最大线程数'},
         {'key': 'daily_video_limit', 'value': '2', 'description': '单账号单日视频数'},
-        {'key': 'daily_image_limit', 'value': '10', 'description': '单账号单日图片数'}
+        {'key': 'daily_image_limit', 'value': '10', 'description': '单账号单日图片数'},
+        {'key': 'image_prompt', 'value': '', 'description': '图片生成提示词'},
+        {'key': 'video_prompt', 'value': '', 'description': '视频生成提示词'},
+        {'key': 'video_duration', 'value': '5', 'description': '视频时长（秒）'}
     ]
     
     for config_data in default_configs:
@@ -258,38 +263,72 @@ def get_all_configs():
         return configs
 
 
-def add_account(token, points=0):
+def add_account(username, password=None, cookies=None):
     """添加账号"""
     try:
-        account = JimengAccount.create(token=token, points=points)
-        logger.info(f"账号添加成功: {token}")
+        account = JimengAccount.create(
+            username=username, 
+            password=password, 
+            cookies=cookies
+        )
+        logger.info(f"账号添加成功: {username}")
         return {'success': True, 'account_id': account.id}
     except Exception as e:
         logger.error(f"添加账号失败: {e}")
         return {'success': False, 'error': str(e)}
 
 
-def batch_add_accounts(tokens, points=0):
+def batch_add_accounts(accounts_data):
     """批量添加账号"""
     try:
         added_accounts = []
         failed_accounts = []
         
-        for token in tokens:
-            token = token.strip()
-            if not token:
+        for account_line in accounts_data:
+            account_line = account_line.strip()
+            if not account_line:
+                continue
+                
+            username = None
+            password = None
+            
+            # 只处理username----password格式
+            if '----' in account_line:
+                parts = account_line.split('----')
+                if len(parts) >= 2:
+                    # 格式：邮箱----密码
+                    username = parts[0]
+                    password = parts[1] if parts[1] else None
+                    logger.info(f"从格式化字符串中提取账号密码: {account_line}")
+                else:
+                    # 格式不正确，跳过
+                    failed_accounts.append(account_line)
+                    logger.warning(f"账号格式不正确，跳过: {account_line}")
+                    continue
+            else:
+                # 没有分隔符，格式不正确，跳过
+                failed_accounts.append(account_line)
+                logger.warning(f"账号格式不正确，跳过: {account_line}")
+                continue
+                
+            if not username:
+                failed_accounts.append(account_line)
+                logger.warning(f"用户名为空，跳过: {account_line}")
                 continue
                 
             try:
-                account = JimengAccount.create(token=token, points=points)
+                account = JimengAccount.create(
+                    username=username,
+                    password=password
+                )
                 added_accounts.append(account.id)
-                logger.info(f"账号添加成功: {token}")
+                logger.info(f"账号添加成功: {username}")
             except IntegrityError:
-                failed_accounts.append(token)
-                logger.warning(f"账号已存在，跳过: {token}")
+                failed_accounts.append(username)
+                logger.warning(f"账号已存在，跳过: {username}")
             except Exception as e:
-                failed_accounts.append(token)
-                logger.error(f"添加账号失败 {token}: {e}")
+                failed_accounts.append(username)
+                logger.error(f"添加账号失败 {username}: {e}")
         
         return {
             'success': True,
@@ -307,10 +346,10 @@ def delete_accounts(account_ids):
     """删除指定ID的账号"""
     try:
         # 删除相关的记录
-        JimengRecord.delete().where(JimengRecord.account << account_ids).execute()
+        JimengRecord.delete().where(JimengRecord.account.in_(account_ids)).execute()
         
         # 删除账号
-        deleted_count = JimengAccount.delete().where(JimengAccount.id << account_ids).execute()
+        deleted_count = JimengAccount.delete().where(JimengAccount.id.in_(account_ids)).execute()
         
         logger.info(f"成功删除 {deleted_count} 个账号")
         return {'success': True, 'deleted_count': deleted_count}
@@ -342,8 +381,9 @@ def get_accounts_with_usage():
             
             accounts.append({
                 'id': account.id,
-                'token': account.token,
-                'points': account.points,
+                'username': account.username,
+                'password': account.password,
+                'cookies': account.cookies,
                 'image_count': image_count,
                 'video_count': video_count,
                 'created_at': account.created_at.strftime('%Y-%m-%d %H:%M:%S'),

@@ -67,3 +67,4 @@ htmlcov/
 
 # Node (if used)
 node_modules/
+generated_images/

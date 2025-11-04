@@ -21,9 +21,46 @@
                 <!-- 首页 -->
                 <div id="home" class="tab-pane active">
                     <div class="panel">
-                        <h2>欢迎使用 Jimeng Scripts</h2>
-                        <p>这是一个基于Python和WebView的应用程序。</p>
-                        <p>请使用上方的标签页导航到不同的功能区域。</p>
+                        <div class="form-section">
+                            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                                <div style="flex: 1;">
+                                    <label for="home_image_prompt">图片提示词:</label>
+                                    <textarea id="home_image_prompt" placeholder="请输入图片生成提示词" style="width: 100%; height: 80px;"></textarea>
+                                    <button class="btn btn-secondary" onclick="saveImagePrompt()" style="margin-top: 10px;">保存提示词</button>
+                                </div>
+                                <div style="flex: 1;">
+                                    <label for="video_prompt">视频提示词:</label>
+                                    <textarea id="video_prompt" placeholder="请输入视频生成提示词" style="width: 100%; height: 80px;"></textarea>
+                                    <button class="btn btn-secondary" onclick="saveVideoPrompt()" style="margin-top: 10px;">保存视频提示词</button>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                                <button class="btn btn-primary" onclick="importFolder()">导入文件夹</button>
+                                <button class="btn btn-secondary" onclick="batchGenerateImages()">图片批量生成</button>
+                                <button class="btn btn-secondary" onclick="batchGenerateVideos()">视频批量生成</button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-section">
+                            <div class="table-container swipe-area" id="home-table-container">
+                                <table id="folder-content-table" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>主图</th>
+                                            <th>模特图</th>
+                                            <th>视频</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- 文件夹内容将在这里动态生成 -->
+                                        <tr>
+                                            <td colspan="4" class="no-data">请导入文件夹查看内容</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -44,8 +81,7 @@
                                         <tr>
                                             <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
                                             <th>ID</th>
-                                            <th>Token</th>
-                                            <th>积分</th>
+                                            <th>用户名</th>
                                             <th>当日图片数</th>
                                             <th>当日视频数</th>
                                         </tr>
@@ -53,7 +89,7 @@
                                     <tbody>
                                         <!-- 账号列表将在这里动态生成 -->
                                         <tr>
-                                            <td colspan="6" class="no-data">暂无账号数据</td>
+                                            <td colspan="5" class="no-data">暂无账号数据</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -77,6 +113,21 @@
                             <div class="form-group">
                                 <label for="model">Model:</label>
                                 <input type="text" id="model" placeholder="例如: gpt-3.5-turbo">
+                            </div>
+                            <div class="form-group">
+                                <label for="settings_image_prompt">图片提示词:</label>
+                                <textarea id="settings_image_prompt" rows="3" placeholder="请输入图片生成的默认提示词"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="settings_video_prompt">视频提示词:</label>
+                                <textarea id="settings_video_prompt" rows="3" placeholder="请输入视频生成的默认提示词"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="video_duration">视频时长:</label>
+                                <div id="video_duration_radio">
+                                    <label><input type="radio" name="video_duration" value="5" checked> 5秒</label>
+                                    <label><input type="radio" name="video_duration" value="10"> 10秒</label>
+                                </div>
                             </div>
                         </div>
                         
@@ -112,8 +163,8 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="batch_accounts">账号Token (每行一个):</label>
-                    <textarea id="batch_accounts" rows="10" placeholder="请输入账号Token，每行一个&#10;例如:&#10;token1&#10;token2&#10;token3"></textarea>
+                    <label for="batch_accounts">账号信息 (每行一个，格式：邮箱----密码):</label>
+                    <textarea id="batch_accounts" rows="10" placeholder="请输入账号信息，每行一个，格式为 邮箱----密码&#10;例如:&#10;user1@example.com----password1&#10;user2@example.com----password2"></textarea>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeBatchAddModal()">取消</button>

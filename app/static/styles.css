@@ -10,6 +10,8 @@
     --primary-hover: #0056b3;
     --success-color: #28a745;
     --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
     --light-bg: #f8f9fa;
     --border-color: #dee2e6;
     --text-color: #333;
@@ -20,6 +22,8 @@
     --modal-bg: rgba(0, 0, 0, 0.5);
     --toast-success: #28a745;
     --toast-error: #dc3545;
+    --toast-warning: #ffc107;
+    --toast-info: #17a2b8;
 }
 
 body {
@@ -28,7 +32,7 @@ body {
     background-color: var(--light-bg);
     line-height: 1.6;
     height: 100vh;
-    overflow: hidden;
+    overflow: hidden; /* 保持隐藏，让内部容器处理滚动 */
 }
 
 .container {
@@ -38,6 +42,7 @@ body {
     padding: 20px;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* 确保容器本身不滚动 */
 }
 
 /* Tab导航 */
@@ -46,12 +51,14 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow: hidden; /* 确保tab容器不滚动 */
 }
 
 .tab-nav {
     display: flex;
     border-bottom: 2px solid var(--tab-border);
     margin-bottom: 20px;
+    flex-shrink: 0; /* 防止导航栏被压缩 */
 }
 
 .tab-button {
@@ -64,6 +71,7 @@ body {
     font-weight: 500;
     color: #666;
     transition: all 0.3s ease;
+    flex-shrink: 0; /* 防止按钮被压缩 */
 }
 
 .tab-button:hover {
@@ -80,15 +88,18 @@ body {
 /* Tab内容 */
 .tab-content {
     flex: 1;
-    overflow: hidden;
+    overflow-y: auto;  /* 确保最外层容器有垂直滚动条 */
+    overflow-x: hidden; /* 隐藏水平滚动条 */
     display: flex;
     flex-direction: column;
+    min-height: 0; /* 允许容器收缩以启用滚动 */
 }
 
 .tab-pane {
     display: none;
     flex: 1;
-    overflow: auto;
+    overflow: hidden;  /* 隐藏内部滚动条 */
+    min-height: 0; /* 允许面板收缩以启用滚动 */
 }
 
 .tab-pane.active {
@@ -104,9 +115,10 @@ body {
     box-shadow: var(--shadow);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     flex: 1;
-    overflow: auto;
+    overflow: auto;  /* 允许面板内部滚动 */
     display: flex;
     flex-direction: column;
+    min-height: 0; /* 允许面板收缩以启用滚动 */
 }
 
 .panel:hover {
@@ -120,10 +132,13 @@ body {
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 2px solid var(--border-color);
+    flex-shrink: 0; /* 防止标题被压缩 */
 }
 
 .form-section {
     margin-bottom: 25px;
+    overflow: visible;  /* 允许表单区域内容滚动 */
+    flex-shrink: 0; /* 防止表单区域被压缩 */
 }
 
 /* 表单组 */
@@ -166,6 +181,7 @@ body {
     transition: all 0.3s ease;
     text-align: center;
     display: inline-block;
+    flex-shrink: 0; /* 防止按钮被压缩 */
 }
 
 .btn-primary {
@@ -236,21 +252,29 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    flex-shrink: 0; /* 防止表头被压缩 */
 }
 
 .table-actions {
     display: flex;
+    flex-shrink: 0; /* 防止操作按钮被压缩 */
 }
 
+/* 表格容器 */
 .table-container {
-    overflow-x: auto;
+    overflow-x: hidden;
     flex: 1;
+    min-height: 400px; /* 确保容器有最小高度 */
+    overflow-y: hidden; /* 取消列表内部滑动，使用外侧滑动 */
+    max-height: none; /* 移除最大高度限制 */
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
     margin: 15px 0;
+    table-layout: fixed; /* 固定表格布局 */
+    min-width: 100%; /* 确保表格占满容器宽度 */
 }
 
 .data-table th,
@@ -278,6 +302,22 @@ body {
     font-style: italic;
     padding: 20px;
 }
+
+/* 滑动相关样式 - 移除或注释掉这部分 */
+/*
+.swipe-area {
+    touch-action: pan-y;
+    user-select: none;
+}
+
+.swipe-indicator {
+    text-align: center;
+    padding: 10px;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+*/
 
 .data-table .token-cell {
     font-family: monospace;
@@ -373,6 +413,16 @@ body {
     gap: 10px;
 }
 
+/* 图片选择模态框特殊样式 */
+#image-selection-modal .modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+#image-selection-modal .modal-body {
+    max-height: calc(90vh - 120px);
+}
+
 /* Toast提示样式 */
 .toast {
     position: fixed;
@@ -400,6 +450,15 @@ body {
 
 .toast-error {
     background-color: var(--toast-error);
+}
+
+.toast-warning {
+    background-color: var(--toast-warning);
+    color: #212529; /* 深色文字以确保可读性 */
+}
+
+.toast-info {
+    background-color: var(--toast-info);
 }
 
 /* 响应式设计 */
@@ -457,6 +516,183 @@ body {
         width: auto;
         min-width: unset;
     }
+    
+    /* 移动端图片选择模态框 */
+    #image-selection-modal .modal-content {
+        width: 95%;
+        max-width: 95vw;
+    }
+}
+
+/* 生成的图片和视频容器 */
+.generated-images, .generated-videos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
+    min-height: 50px;
+}
+
+/* 文件夹内容表格 */
+#folder-content-table th,
+#folder-content-table td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+#folder-content-table .token-cell {
+    max-width: 200px;
+}
+
+#folder-content-table img, 
+#folder-content-table video {
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 文件夹内容表格列宽设置 */
+#folder-content-table th:nth-child(1),
+#folder-content-table td:nth-child(1) {
+    width: 15.4%; /* 主图列 (1/6.5 ≈ 15.4%) */
+}
+
+#folder-content-table th:nth-child(2),
+#folder-content-table td:nth-child(2) {
+    width: 61.5%; /* 模特图列 (4/6.5 ≈ 61.5%) */
+}
+
+#folder-content-table th:nth-child(3),
+#folder-content-table td:nth-child(3) {
+    width: 15.4%; /* 视频列 (1/6.5 ≈ 15.4%) */
+}
+
+#folder-content-table th:nth-child(4),
+#folder-content-table td:nth-child(4) {
+    width: 7.7%; /* 操作列 (0.5/6.5 ≈ 7.7%) */
+}
+
+/* 操作按钮纵向排列 */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+}
+
+/* 加载动画 */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* 状态指示器动画 */
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.status-indicator {
+    display: none;
+}
+
+/* Switch开关样式 */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* 筛选下拉框样式 */
+#account-filter {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: white;
+    cursor: pointer;
+    margin-right: 15px;
+}
+
+#account-filter:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* 生成的图片和视频容器 */
+.generated-images, .generated-videos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+/* 文件夹内容表格 */
+#folder-content-table th,
+#folder-content-table td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+#folder-content-table .token-cell {
+    max-width: 200px;
+}
+
+#folder-content-table img, 
+#folder-content-table video {
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* 加载动画 */
