@@ -1,3 +1,2 @@
-PyQt5
+PyQt6
 playwright
-pywebview>=5.2.1

@@ -268,11 +268,14 @@ async def generate_video(
             
             print("提交按钮点击流程完成")
             
-            # 等待视频生成完成，最多等待5分钟
+            # 等待视频生成完成，最多等待15分钟；等待任务ID最多60次
             print("等待视频生成完成...")
             start_time = time.time()
             wait_count = 0
-            while not generation_completed and (time.time() - start_time) < 300:  # 5分钟超时
+            max_wait_without_taskid = 60
+            no_taskid_attempts = 0
+            taskid_wait_exceeded = False
+            while not generation_completed and (time.time() - start_time) < 900:  # 15分钟超时
                 wait_count += 1
                 # 如果已获取到任务ID，每5秒刷新一次页面
                 if task_id:
@@ -282,8 +285,13 @@ async def generate_video(
                     await page.reload()
                     print("页面刷新完成")
                 else:
-                    print(f"尚未获取任务ID，继续等待... (等待次数: {wait_count})")
+                    no_taskid_attempts += 1
+                    print(f"尚未获取任务ID，继续等待... (等待次数: {wait_count}，未获ID计数: {no_taskid_attempts}/{max_wait_without_taskid})")
                     await asyncio.sleep(2)
+                    if no_taskid_attempts >= max_wait_without_taskid:
+                        print(f"超过最大等待次数({max_wait_without_taskid})，未获取到任务ID")
+                        taskid_wait_exceeded = True
+                        break
             
             if generation_completed:
                 print("视频生成完成")
@@ -297,7 +305,7 @@ async def generate_video(
             # 获取并返回cookies
             cookies = await page.context.cookies()
             print("获取cookies完成")
-            
+
             # 如果有账号ID，保存cookies到数据库
             if account_id and cookies:
                 try:
@@ -310,8 +318,13 @@ async def generate_video(
                         print(f"保存账号 {account_id} 的cookies到数据库失败")
                 except Exception as e:
                     print(f"保存cookies到数据库时出错: {e}")
-            
-            return {"success": True, "cookies": cookies, "video_url": video_url}
+
+            # 根据等待结果返回成功或失败
+            if generation_completed:
+                return {"success": True, "cookies": cookies, "video_url": video_url}
+            else:
+                err_msg = "等待任务ID超过最大次数(60)" if taskid_wait_exceeded else "视频生成超时"
+                return {"success": False, "error": err_msg, "cookies": cookies}
                 
         except Exception as e:
             print(f"视频生成失败: {str(e)}")
