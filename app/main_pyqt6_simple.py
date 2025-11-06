@@ -642,10 +642,16 @@ class MainWindow(QMainWindow):
         """)
         self.refresh_accounts_btn.clicked.connect(self.refresh_accounts)
         
+        # 新增：全选复选框
+        self.select_all_checkbox = QCheckBox("全选")
+        self.select_all_checkbox.setToolTip("选择/取消选择所有账号")
+        self.select_all_checkbox.stateChanged.connect(self.on_accounts_select_all_toggled)
+        
         control_layout.addWidget(self.add_account_btn)
         control_layout.addWidget(self.batch_add_btn)
         control_layout.addWidget(self.delete_account_btn)
         control_layout.addWidget(self.refresh_accounts_btn)
+        control_layout.addWidget(self.select_all_checkbox)
         control_layout.addStretch()
         
         # 账号列表区域
@@ -717,6 +723,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(accounts_list_group)
         
         self.tab_widget.addTab(accounts_widget, "账号管理")
+        
+        # 新增：首次打开自动加载账号列表
+        try:
+            QTimer.singleShot(0, self.refresh_accounts)
+        except Exception:
+            # 兜底直接调用
+            self.refresh_accounts()
         
     def create_settings_tab(self):
         """创建设置标签页"""
@@ -1806,8 +1819,35 @@ class MainWindow(QMainWindow):
                             # 推断扩展名，默认.mp4
                             base = os.path.basename(video_url)
                             ext = os.path.splitext(base)[1] or '.mp4'
-                            new_video_name = f"generated_{int(time.time())}{ext}"
+                            # 使用主图的文件夹名作为视频文件名
+                            folder_name = None
+                            try:
+                                if 0 <= row < len(self.current_files):
+                                    folder_path = self.current_files[row].get('folder_path')
+                                    if folder_path:
+                                        folder_name = os.path.basename(folder_path)
+                                # 兜底：从主图路径推断父文件夹名
+                                if not folder_name:
+                                    main_image_path = self.current_files[row].get('main_image') if 0 <= row < len(self.current_files) else None
+                                    if main_image_path:
+                                        folder_name = os.path.basename(os.path.dirname(main_image_path))
+                            except Exception:
+                                folder_name = None
+
+                            base_name = folder_name or f"generated_{int(time.time())}"
+                            new_video_name = f"{base_name}{ext}"
                             new_video_path = os.path.join(str(self.generated_videos_dir), new_video_name)
+                            # 如果文件已存在，追加序号避免覆盖
+                            if os.path.exists(new_video_path):
+                                idx = 1
+                                while True:
+                                    alt_name = f"{base_name}_{idx}{ext}"
+                                    alt_path = os.path.join(str(self.generated_videos_dir), alt_name)
+                                    if not os.path.exists(alt_path):
+                                        new_video_name = alt_name
+                                        new_video_path = alt_path
+                                        break
+                                    idx += 1
                             with open(new_video_path, 'wb') as f:
                                 for chunk in response.iter_content(1024 * 64):
                                     f.write(chunk)
@@ -2215,6 +2255,20 @@ class MainWindow(QMainWindow):
                     QMessageBox.critical(self, "错误", f"删除账号失败: {result.get('error')}")
         else:
             QMessageBox.warning(self, "警告", "请选择要删除的账号")
+    
+    def on_accounts_select_all_toggled(self, _state):
+        """全选/取消全选账号列表中的复选框"""
+        try:
+            check = bool(self.select_all_checkbox.isChecked())
+        except Exception:
+            check = False
+        try:
+            for row in range(self.accounts_table.rowCount()):
+                widget = self.accounts_table.cellWidget(row, 0)
+                if widget and isinstance(widget, QCheckBox):
+                    widget.setChecked(check)
+        except Exception:
+            pass
         
     def refresh_accounts(self):
         """刷新账号列表"""
@@ -2246,6 +2300,14 @@ class MainWindow(QMainWindow):
             status_bar = self.statusBar()
             if status_bar is not None:
                 status_bar.showMessage(f"账号列表已刷新，共 {len(accounts)} 个账号")
+            # 刷新后重置“全选”复选框为未选中
+            try:
+                if hasattr(self, 'select_all_checkbox') and self.select_all_checkbox:
+                    self.select_all_checkbox.blockSignals(True)
+                    self.select_all_checkbox.setChecked(False)
+                    self.select_all_checkbox.blockSignals(False)
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新账号列表失败: {str(e)}")
         

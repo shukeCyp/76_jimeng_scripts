@@ -75,17 +75,34 @@ def generate_scene(image_path: str, title: str = "") -> str:
         except Exception as e:
             logging.warning(f"读取图片失败，将使用文本模式生成场景: {e}")
 
-        # 通用请求头与URL
-        url = f"{base_url}/chat/completions"
+        # 构建请求 URL（兼容传入 base_url 为根域或 /v1 或完整路径的情况）
+        def build_chat_url(base: str) -> str:
+            b = (base or "").strip().rstrip("/")
+            if not b:
+                return "https://api.openai.com/v1/chat/completions"
+            # 已提供完整 chat/completions 路径
+            if b.endswith("/chat/completions") or b.endswith("/responses"):
+                return b
+            # 已到 /v1 根
+            if b.endswith("/v1"):
+                return f"{b}/chat/completions"
+            # 其他情况，补齐 /v1/chat/completions
+            return f"{b}/v1/chat/completions"
+
+        url = build_chat_url(base_url)
         headers = {
             "Authorization": f"Bearer {apikey}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
 
-        system_prompt = "你是产品展示场景生成助手。只输出中文的一句场景，不要其他解释或前后缀。"
+        system_prompt = (
+            "你是产品展示场景生成助手。只输出中文场景短语，不要解释、标点或引号。"
+            "长度不超过10个汉字。"
+        )
         user_text = (
             f"产品标题：{title or '未知产品'}\n"
-            f"请基于产品图片与标题，生成一个适合电商展示的场景（仅一句话，中文）。"
+            f"基于产品图片与标题，生成适合电商展示的中文场景短语。要求：不超过10个汉字，仅场景，不含标题、品牌、引号或任何标点。"
         )
 
         # 首先尝试图像+文本输入
@@ -102,12 +119,55 @@ def generate_scene(image_path: str, title: str = "") -> str:
                         ],
                     }
                 ],
-                "max_tokens": 128
-            }
+                "max_tokens": 32
+                }
             try:
-                resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=20)
+                # 打印请求内容（已部分脱敏）
+                try:
+                    payload_preview = {
+                        "model": payload.get("model"),
+                        "messages": []
+                    }
+                    for msg in payload.get("messages", []):
+                        if isinstance(msg.get("content"), list):
+                            new_content = []
+                            for c in msg["content"]:
+                                if isinstance(c, dict) and c.get("type") == "image_url":
+                                    url_val = c.get("image_url", {}).get("url", "")
+                                    if isinstance(url_val, str) and url_val.startswith("data:image/"):
+                                        new_content.append({
+                                            "type": "image_url",
+                                            "image_url": {"url": f"<data-uri length={len(url_val)} chars>"}
+                                        })
+                                    else:
+                                        new_content.append(c)
+                                else:
+                                    new_content.append(c)
+                            payload_preview["messages"].append({"role": msg.get("role"), "content": new_content})
+                        else:
+                            payload_preview["messages"].append({"role": msg.get("role"), "content": msg.get("content")})
+
+                    masked_headers = {"Authorization": "Bearer ****", "Content-Type": headers.get("Content-Type")}
+                    data_str = json.dumps(payload, ensure_ascii=False)
+                    logging.info(f"GPT 场景生成请求(图像+文本) URL: {url}")
+                    logging.info(f"Headers: {masked_headers}")
+                    logging.info(f"Payload(preview): {json.dumps(payload_preview, ensure_ascii=False)[:2000]}")
+                except Exception as log_e:
+                    logging.warning(f"打印图像+文本请求内容失败: {log_e}")
+
+                resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                logging.info(f"图像+文本响应状态: {resp.status_code}")
+                # 打印部分响应文本以便排错
+                try:
+                    logging.info(f"图像+文本响应文本预览: {resp.text[:500]}")
+                except Exception:
+                    pass
                 if resp.status_code == 200:
-                    data = resp.json()
+                    try:
+                        data = resp.json()
+                    except Exception as je:
+                        logging.error(f"图像+文本响应解析JSON失败: {je}; 文本预览: {resp.text[:500]}")
+                        raise je
                     content = (
                         data.get("choices", [{}])[0]
                             .get("message", {})
@@ -115,9 +175,14 @@ def generate_scene(image_path: str, title: str = "") -> str:
                             .strip()
                     )
                     if content:
-                        return content
+                        try:
+                            short = shorten_scene_text(content, 10)
+                            logging.info(f"场景(图像+文本)截断: 原='{content}' -> 短='{short}'")
+                        except Exception:
+                            short = content[:10]
+                        return short or "唯美街拍"
                 else:
-                    logging.warning(f"图像+文本场景生成失败，HTTP {resp.status_code}: {resp.text[:200]}")
+                    logging.warning(f"图像+文本场景生成失败，HTTP {resp.status_code}: {resp.text[:500]}")
             except Exception as e:
                 logging.warning(f"图像+文本场景生成请求异常，将回退文本模式: {e}")
 
@@ -128,12 +193,30 @@ def generate_scene(image_path: str, title: str = "") -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_text}
             ],
-            "max_tokens": 128
+            "max_tokens": 32
         }
         try:
-            resp2 = requests.post(url, headers=headers, data=json.dumps(payload_text_only), timeout=20)
+            # 打印请求内容（文本模式）
+            try:
+                masked_headers2 = {"Authorization": "Bearer ****", "Content-Type": headers.get("Content-Type")}
+                logging.info(f"GPT 场景生成请求(文本) URL: {url}")
+                logging.info(f"Headers: {masked_headers2}")
+                logging.info(f"Payload: {json.dumps(payload_text_only, ensure_ascii=False)[:2000]}")
+            except Exception as log_e2:
+                logging.warning(f"打印文本请求内容失败: {log_e2}")
+
+            resp2 = requests.post(url, headers=headers, json=payload_text_only, timeout=30)
+            logging.info(f"文本响应状态: {resp2.status_code}")
+            try:
+                logging.info(f"文本响应文本预览: {resp2.text[:500]}")
+            except Exception:
+                pass
             if resp2.status_code == 200:
-                data2 = resp2.json()
+                try:
+                    data2 = resp2.json()
+                except Exception as je2:
+                    logging.error(f"文本响应解析JSON失败: {je2}; 文本预览: {resp2.text[:500]}")
+                    raise je2
                 content2 = (
                     data2.get("choices", [{}])[0]
                         .get("message", {})
@@ -141,16 +224,21 @@ def generate_scene(image_path: str, title: str = "") -> str:
                         .strip()
                 )
                 if content2:
-                    return content2
+                    try:
+                        short2 = shorten_scene_text(content2, 10)
+                        logging.info(f"场景(文本)截断: 原='{content2}' -> 短='{short2}'")
+                    except Exception:
+                        short2 = content2[:10]
+                    return short2 or "唯美街拍"
             else:
-                logging.error(f"文本场景生成失败，HTTP {resp2.status_code}: {resp2.text[:200]}")
+                logging.error(f"文本场景生成失败，HTTP {resp2.status_code}: {resp2.text[:500]}")
         except Exception as e:
             logging.error(f"文本场景生成请求异常: {e}")
 
-        return "简洁现代室内场景，柔和自然光线"
+        return "唯美街拍"
     except Exception as e:
         logging.error(f"生成场景失败: {e}")
-        return "简洁现代室内场景，柔和自然光线"
+        return "唯美街拍"
 
 
 def generate_sence(image_path: str) -> str:
@@ -190,7 +278,10 @@ def merge_prompt_with_scene(prompt: str, title: str, scene: str) -> str:
                 return title or ""
             return raw  # 未识别的占位符保持不变
 
-        filled = re.sub(r"<\s*([^<>]+?)\s*>", replacer, prompt)
+        # 先将空占位符 <> 视为场景占位符
+        filled = re.sub(r"<\s*>", scene or "", prompt)
+        # 再替换具名占位符
+        filled = re.sub(r"<\s*([^<>]+?)\s*>", replacer, filled)
 
         # 如果填充后不包含场景文本（说明没有场景占位符），在末尾追加场景。
         if scene and (scene not in filled):
@@ -202,3 +293,19 @@ def merge_prompt_with_scene(prompt: str, title: str, scene: str) -> str:
         # 退化：原始提示词 + 场景
         base = prompt or ""
         return f"{base}\n{scene}".strip()
+def shorten_scene_text(text: str, max_chars: int = 10) -> str:
+    """
+    规范化并截断场景文本：
+    - 去除空白、引号与常见中文标点
+    - 限制最大字符数为 max_chars（默认10）
+    - 输入非字符串时返回空串
+    """
+    if not isinstance(text, str):
+        return ""
+    s = text.strip()
+    # 去除所有空白字符
+    s = re.sub(r"\s+", "", s)
+    # 去除常见标点与引号
+    s = re.sub(r"[\"'“”‘’、，,。．。！？!?：:；;（）()《》〈〉＜＞<>\[\]【】—–-…·•]", "", s)
+    # 截断到指定长度
+    return s[:max_chars]

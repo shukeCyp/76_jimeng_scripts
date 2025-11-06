@@ -130,11 +130,11 @@ async def generate_image(cookies, username, password, prompt, image_path, headle
                 # 等待登录成功的标识元素出现 (使用更稳定的定位方式)
                 # 等待包含积分显示的容器出现，表示登录成功
                 print("等待登录成功...")
-                await page.wait_for_selector("[class*='credit-display-container']", timeout=30000)
+                await page.wait_for_selector("[class*='credit-display-container']", timeout=60000)
                 print("登录成功")
             # 跳转https://dreamina.capcut.com/ai-tool/generate?type=image
             print("跳转到图片生成页面...")
-            await page.goto("https://dreamina.capcut.com/ai-tool/generate?type=image", timeout=30000)
+            await page.goto("https://dreamina.capcut.com/ai-tool/generate?type=image", timeout=60000)
             print("图片生成页面加载完成")
 
             # <button class="lv-btn lv-btn-secondary lv-btn-size-default lv-btn-shape-square button-oBBmQ2" type="button"><svg width="1em" height="1em" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" fill="none" role="presentation" xmlns="http://www.w3.org/2000/svg" class=""><g><path data-follow-fill="currentColor" d="M19.25 17.25V6.75a2 2 0 0 0-2-2H6.75a2 2 0 0 0-2 2v10.5a2 2 0 0 0 2 2h10.5a2 2 0 0 0 2-2Zm2-10.5a4 4 0 0 0-4-4H6.75a4 4 0 0 0-4 4v10.5a4 4 0 0 0 4 4h10.5a4 4 0 0 0 4-4V6.75Z" clip-rule="evenodd" fill-rule="evenodd" fill="currentColor"></path></g></svg><span class="button-text-H4VSVJ">1:1<div class="divider-ys3wAF"></div><div class="commercial-content-ha0tzp">High (2K)</div></span></button>

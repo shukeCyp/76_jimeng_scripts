@@ -12,7 +12,7 @@ async def generate_video(
     prompt, 
     seconds,
     image_path, 
-    headless=False,
+    headless=True,
     account_id=None):
     """
     使用Playwright和已登录的session ID生成视频
@@ -139,11 +139,11 @@ async def generate_video(
                 # 等待登录成功的标识元素出现 (使用更稳定的定位方式)
                 # 等待包含积分显示的容器出现，表示登录成功
                 print("等待登录成功...")
-                await page.wait_for_selector("[class*='credit-display-container']", timeout=30000)
+                await page.wait_for_selector("[class*='credit-display-container']", timeout=60000)
                 print("登录成功")
             # 跳转https://dreamina.capcut.com/ai-tool/generate?type=video
             print("跳转到视频生成页面...")
-            await page.goto("https://dreamina.capcut.com/ai-tool/generate?type=video", timeout=30000)
+            await page.goto("https://dreamina.capcut.com/ai-tool/generate?type=video", timeout=60000)
             print("视频生成页面加载完成")
 
             # <button class="lv-btn lv-btn-secondary lv-btn-size-default lv-btn-shape-square button-oBBmQ2" type="button"><svg width="1em" height="1em" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" fill="none" role="presentation" xmlns="http://www.w3.org/2000/svg" class=""><g><path data-follow-fill="currentColor" d="M19.25 17.25V6.75a2 2 0 0 0-2-2H6.75a2 2 0 0 0-2 2v10.5a2 2 0 0 0 2 2h10.5a2 2 0 0 0 2-2Zm2-10.5a4 4 0 0 0-4-4H6.75a4 4 0 0 0-4 4v10.5a4 4 0 0 0 4 4h10.5a4 4 0 0 0 4-4V6.75Z" clip-rule="evenodd" fill-rule="evenodd" fill="currentColor"></path></g></svg><span class="button-text-H4VSVJ">1:1<div class="divider-ys3wAF"></div><div class="commercial-content-ha0tzp">High (2K)</div></span></button>
@@ -182,6 +182,37 @@ async def generate_video(
             print("点击9:16比例按钮...")
             await page.click("button:has-text('16:9')")
             print("9:16比例按钮点击完成")
+
+            # <span class="lv-select-view-value"><span class="select-option-icon-c5Ol2F"><svg width="1em" height="1em" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" fill="none" role="presentation" xmlns="http://www.w3.org/2000/svg" class=""><g><path data-follow-fill="currentColor" d="M4 12a8 8 0 1 0 16 0 8 8 0 0 0-16 0Zm8 10C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm-.866-10.5a1 1 0 1 0 1.732 1l2-3.464a1 1 0 1 0-1.732-1l-2 3.464Z" clip-rule="evenodd" fill-rule="evenodd" fill="currentColor"></path></g></svg></span>5s</span>
+            # 点击选择时长
+            print("点击选择时长...")
+            # 先等待包含“5s”文本的下拉按钮出现
+            await page.wait_for_selector('span.lv-select-view-value:has-text("5s")', timeout=10000)
+            # 使用更稳定的 JS 强制点击
+            clicked = await page.evaluate('''() => {
+                const span = document.querySelector('span.lv-select-view-value');
+                if (span) {
+                    span.scrollIntoView({behavior: "instant", block: "center"});
+                    // 强制触发点击
+                    span.dispatchEvent(new MouseEvent('mousedown', {bubbles: true}));
+                    span.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+                    span.click();
+                    return true;
+                }
+                return false;
+            }''')
+            if not clicked:
+                # 兜底：直接点击包含“5s”文本的 span
+                await page.click('span.lv-select-view-value:has-text("5s")')
+            print("选择时长点击完成")
+            # 根据传入的 seconds 参数选择对应时长
+            duration_text = f"{seconds}s"
+            print(f"选择时长: {duration_text}")
+            # 先点击下拉展开时长选项
+            await page.click("span:has-text('5s')")
+            # 点击目标时长选项
+            await page.click(f"li[role='option']:has-text('{duration_text}')")
+            print("目标时长选择完成")
 
             # 使用js强制点击
 
@@ -354,3 +385,46 @@ async def generate_video(
             print("关闭浏览器...")
             await browser.close()
             print("浏览器已关闭")
+async def main():
+    """
+    命令行入口：读取参数并调用 generate_video
+    参数顺序：
+        1. username      邮箱账号
+        2. password      密码
+        3. prompt        提示词（如有空格请用引号包裹）
+        4. seconds       视频时长（秒）
+        5. image_path    图片绝对路径
+        6. headless      可选，默认 true；传 false 可开启有头模式
+        7. account_id    可选，账号ID，用于保存 cookies 到数据库
+    示例：
+        python jimeng_video_util.py user@example.com 123456 "a cute cat" 10 /tmp/cat.png
+    """
+    # 参数写死
+    username   = "gaqkqgscn@emltmp.com"
+    password   = "Aa123456"
+    prompt     = "跳舞"
+    seconds    = 10
+    image_path = "/Users/chaiyapeng/Downloads/17311948576731018310.webp"
+    headless   = False
+    account_id = None
+
+    # 空 cookies 列表，首次登录
+    cookies = [{"name": "cee", "value": "JdLcaXDeh57HIdKMfCgEdwcO2Slz3Za3JJw8miqXkLI%3D.%7B%7D", "domain": ".mpc-prod-18-s6uit34pua-uc.a.run.app", "path": "/events/8fb2ad23c8f8b94190406835a6eae1e6345627ad967b4a2e640ff3fb88fec43c", "expires": 1770140167.969067, "httpOnly": True, "secure": True, "sameSite": "None"}, {"name": "faceu-commerce-user-info", "value": "Z0zKU04UXS5AFeUs2R5BPcv-C5S2ojPaouDN90apvkmcPzwgDgPfJ9UJRpbIRojlxW_4hlKZj6nTiGOzA4OmlnlQcboCdWLkSInCMZmEkasnUlGxd9W8MtYj3n2ZfGEHWzrahyE3jpVpCQ_yZQEVoxlSH3JK0LYa-Sn6VyW6WWuiCQXAa6-i8kVhYxk1jRhdIlxLrW8SqFsrugqeFs2kuoQFIVBD0dGilp96fEYu3uLOpTJClv5QeHtiBwYskMzh-H1BytZkIvAAdaxmpSblQeZJo_3qxQ6KUdAsEbgAu8T6lgbbf19YM7wBv1HNaiZKg4ShDCZzdSwLp7RuE2ir8AUlrwW3L7rdpMmQaTuzVT7OvEIIc8rWbppV4sMmhkEOI-VDD4pXp65T_fToR5KiCOUAtwkBv0-NCFZuu1Et3Fam5DHkYYy70_xyGhiLOS-ZT_cb-5a5GWqyBSIjjBK7cuIx3GkpWcRxpz9PNoT8ux9uo-_Ju6Kb7UKBaACCuMfEHgO7Nk2hjlg6MBBjGXD4", "domain": ".capcut.com", "path": "/commerce/v1/subscription/user_info", "expires": 1796924160.939075, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "_tea_web_id", "value": "7569211615418172944", "domain": "dreamina.capcut.com", "path": "/", "expires": 1762497099.594887, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "capcut_locale", "value": "en", "domain": "dreamina.capcut.com", "path": "/", "expires": 1796472432, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "fpk1", "value": "02303d267268c4525e2b514de13679cd3704b955dd366a574b995db6a80fb3bf34025180dd180393484130abd4d7971b", "domain": "dreamina.capcut.com", "path": "/", "expires": 1793880433.73402, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "uifid_temp", "value": "89e9331e58b9970efe317e494d7d1997271d127b1b4b7326b704a4b07dc10a3b65c828672874a16680395e102a8d819fa2183906812baffbbfaaf7a3d832b8cc391ef377e9a6aad7d0acd5f5d91013f4", "domain": "mweb-api-sg.capcut.com", "path": "/", "expires": 1796904434.160437, "httpOnly": False, "secure": True, "sameSite": "None"}, {"name": "_isCommercialFreemiumStage", "value": "0", "domain": "dreamina.capcut.com", "path": "/", "expires": 1762968961, "httpOnly": False, "secure": True, "sameSite": "Strict"}, {"name": "s_v_web_id", "value": "verify_mhlyeewl_qfpZrlwK_wC9U_4OZW_8i0W_EccFmhc0exaB", "domain": "dreamina.capcut.com", "path": "/", "expires": -1, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "passport_csrf_token", "value": "0bb9d3ab597a231060dd64a7d21c31ec", "domain": ".capcut.com", "path": "/", "expires": 1767528480.809554, "httpOnly": False, "secure": True, "sameSite": "None"}, {"name": "passport_csrf_token_default", "value": "0bb9d3ab597a231060dd64a7d21c31ec", "domain": ".capcut.com", "path": "/", "expires": 1767528480.809586, "httpOnly": False, "secure": True, "sameSite": "Lax"}, {"name": "sid_guard", "value": "8b558ef8e419009774213686eee77abd%7C1762344484%7C5183999%7CSun%2C+04-Jan-2026+12%3A08%3A03+GMT", "domain": ".capcut.com", "path": "/", "expires": 1793448482.069355, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "uid_tt", "value": "d1e27d12f65739eadb12aefb345dcd7f834349d7e4fd9930439a00f68b473349", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069394, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "uid_tt_ss", "value": "d1e27d12f65739eadb12aefb345dcd7f834349d7e4fd9930439a00f68b473349", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069403, "httpOnly": True, "secure": True, "sameSite": "None"}, {"name": "sid_tt", "value": "8b558ef8e419009774213686eee77abd", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069411, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "sessionid", "value": "8b558ef8e419009774213686eee77abd", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069418, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "sessionid_ss", "value": "8b558ef8e419009774213686eee77abd", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069425, "httpOnly": True, "secure": True, "sameSite": "None"}, {"name": "tt_session_tlb_tag", "value": "sttt%7C5%7Ci1WO-OQZAJd0ITaG7ud6vf________-5KuCwWjaQtk6e-2-oOgsjZsWdUrkSlBoEUKH7pOKNAsM%3D", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069434, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "sid_ucp_v1", "value": "1.0.0-KDYzYjFkYTY5NTQyYzVmNjE0MmEzMWU5NDI5Yzc4Mjg3ZTRhMTRlYmMKGQiSiIGIyZaL_mgQpPysyAYY6awfOAFA6wcQAxoDbXkyIiA4YjU1OGVmOGU0MTkwMDk3NzQyMTM2ODZlZWU3N2FiZA", "domain": ".capcut.com", "path": "/", "expires": 1767528481.06944, "httpOnly": True, "secure": True, "sameSite": "Lax"}, {"name": "ssid_ucp_v1", "value": "1.0.0-KDYzYjFkYTY5NTQyYzVmNjE0MmEzMWU5NDI5Yzc4Mjg3ZTRhMTRlYmMKGQiSiIGIyZaL_mgQpPysyAYY6awfOAFA6wcQAxoDbXkyIiA4YjU1OGVmOGU0MTkwMDk3NzQyMTM2ODZlZWU3N2FiZA", "domain": ".capcut.com", "path": "/", "expires": 1767528481.069449, "httpOnly": True, "secure": True, "sameSite": "None"}, {"name": "store-idc", "value": "alisg", "domain": ".capcut.com", "path": "/", "expires": 1767528483.916554, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "store-country-code", "value": "cn", "domain": ".capcut.com", "path": "/", "expires": 1767528483.91687, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "store-country-code-src", "value": "uid", "domain": ".capcut.com", "path": "/", "expires": 1767528483.916882, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "cc-target-idc", "value": "alisg", "domain": ".capcut.com", "path": "/", "expires": 1767528483.916893, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "tt-target-idc-sign", "value": "X2BoTwdTNpgu4GjUvO3hYeOYk40el_P7TAqJu44-UpwGU_0Hv65uZ2pj1PtTzb45d5l6FXtuLNda_31JAkAnWP34XrjVzA0q9Vus4sXb_RzpbtQnQfC2s0arql_Ro6B96uqaD8b5U-x4wHJN1Xc08Fxzd3Wm9z5zGKl1ZXYEiORWCBtKJ8-3LKIElt-EhvKOLCdofQvYcBVfsWnk4jCHmj13voGkbWg0zdpPMBX0okWfF_pasPx7WhuniA7xgfeVVC8kDjbWlVCeILECrPNUVBFuBmB_oMDkUD-ZwObpfcQC0nbiDg4P_2rI8O5J0_0AoRKX6TeQNI6MzR29B8sI-2nQcmjkdla7SLEcKPvUa9wGnH5Azv3I4A_LViD9OEBcuSMaF88tswlEVxUNzWqPiniiQA2qzmgYFWagP1AKVYNQyjGUDbWbcIpPFv5ohku6JJDw-O_sDb3VUZSUIDNksNHf1luc2MIsp77CseksmGZfSbG2ObNgDUsxrsTmUYm-", "domain": ".capcut.com", "path": "/", "expires": 1793880482.069502, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "dm_auid", "value": "8wgy8Lwkl0+ju9acj2ogNwGQ1GmaXfaYM/pQFHj82W8=", "domain": "mweb-api-sg.capcut.com", "path": "/", "expires": 1796904484.266345, "httpOnly": False, "secure": True, "sameSite": "None"}, {"name": "_fbp", "value": "fb.1.1762363982720.917256718191619554", "domain": ".capcut.com", "path": "/", "expires": 1770140167, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "_ga", "value": "GA1.1.1025518833.1762363983", "domain": ".capcut.com", "path": "/", "expires": 1796924167.702435, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "store-country-sign", "value": "MEIEDGQNrE0RWF4Zen4lMAQgZB_Nff838HahwKVGgsVhPljjCTPV2yfnzbWlHvDvg0AEEKiKfffPjKE1ApWnqw_3qA4", "domain": ".capcut.com", "path": "/", "expires": 1767528483.916852, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "msToken", "value": "_Ur9qfRa6E1BUVJym9J153j2haNfoBPKZbSGDu9zRCQ937LWGCY_5d9vgeSvCIwIdEkL65UGeQUA1eTm2u1zieyNWJWBT176NtrfkY8_CoiiBg==", "domain": ".capcut.com", "path": "/", "expires": 1763228162.146286, "httpOnly": False, "secure": True, "sameSite": "None"}, {"name": "odin_tt", "value": "17eee1f15203f2b63f921838d9c3075fa84c324eea645d83e8ce5e8f986e255cb4186cbec30007c62df63982fcd13520afce22052f597f414aaac6fdcd260825", "domain": ".capcut.com", "path": "/", "expires": 1793900162.160153, "httpOnly": True, "secure": False, "sameSite": "Lax"}, {"name": "_ga_F8PY8CNX7V", "value": "GS2.1.s1762363983$o1$g1$t1762364167$j14$l0$h0", "domain": ".capcut.com", "path": "/", "expires": 1796924167.709867, "httpOnly": False, "secure": False, "sameSite": "Lax"}, {"name": "ttwid", "value": "1|BLc8-mBixUXj4DwVjEZTALCE4Mo-64qDDLvRCsNyWRk|1762410699|78f4cce877d7f6617a26546184358e617a14b14b3812b3ee6d8c37f07f7b8fe8", "domain": ".capcut.com", "path": "/", "expires": 1793946699.594832, "httpOnly": True, "secure": True, "sameSite": "Lax"}]
+
+    result = await generate_video(
+        cookies=cookies,
+        username=username,
+        password=password,
+        prompt=prompt,
+        seconds=seconds,
+        image_path=image_path,
+        headless=headless,
+        account_id=account_id
+    )
+
+    print("\n===== 执行结果 =====")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
