@@ -80,7 +80,7 @@ def setup_logging():
     if HAS_LOGURU:
         # 配置 loguru
         loguru_logger.remove()  # 移除默认的日志处理器
-        
+
         # 添加文件日志处理器
         log_file = os.path.join(logs_dir, "app.log")
         loguru_logger.add(
@@ -91,14 +91,21 @@ def setup_logging():
             encoding="utf-8",
             level="INFO"
         )
-        
+
         # 添加控制台日志处理器（调试用）
-        loguru_logger.add(
-            sys.stdout,
-            level="DEBUG",
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-        )
-        
+        # 注意：在 PyInstaller 的 windowed 模式下，sys.stdout 可能为 None
+        try:
+            console_stream = getattr(sys, "stdout", None) or getattr(sys, "__stdout__", None)
+            if console_stream is not None:
+                loguru_logger.add(
+                    console_stream,
+                    level="DEBUG",
+                    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+                )
+        except Exception:
+            # 如果添加控制台失败，忽略即可（仅文件日志生效）
+            pass
+
         return loguru_logger
     else:
         # 使用标准 logging 配置
@@ -200,7 +207,8 @@ def init_default_configs():
         {'key': 'daily_image_limit', 'value': '10', 'description': '单账号单日图片数'},
         {'key': 'image_prompt', 'value': '', 'description': '图片生成提示词'},
         {'key': 'video_prompt', 'value': '', 'description': '视频生成提示词'},
-        {'key': 'video_duration', 'value': '5', 'description': '视频时长（秒）'}
+        {'key': 'video_duration', 'value': '5', 'description': '视频时长（秒）'},
+        {'key': 'browser_headless', 'value': '1', 'description': '浏览器无头模式开关（1开，0关）'}
     ]
     
     for config_data in default_configs:

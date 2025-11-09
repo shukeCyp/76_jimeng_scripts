@@ -39,6 +39,21 @@ except ImportError:
     print("PyQt6未安装，请运行: pip install PyQt6")
     sys.exit(1)
 
+# 在应用启动时设置 Playwright 浏览器目录，确保打包后可用
+try:
+    def _set_playwright_browsers_path():
+        base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+        packaged_dir = base_dir / "ms-playwright"
+        if packaged_dir.exists():
+            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(packaged_dir)
+        else:
+            local = os.environ.get("LOCALAPPDATA")
+            if local:
+                os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(Path(local) / "ms-playwright")
+    _set_playwright_browsers_path()
+except Exception:
+    pass
+
 # 导入现有的模块
 from database import init_database, close_database, logger, get_config, set_config, get_all_configs, add_account, batch_add_accounts, delete_accounts, get_accounts_with_usage, add_record
 from accounts_utils import get_image_account, get_video_account
@@ -344,11 +359,21 @@ class MainWindow(QMainWindow):
         self._image_retry_counts = {}
         self._video_retry_counts = {}
 
-        # 统一生成文件的保存目录（项目根目录）
+        # 统一生成文件的保存目录：
+        # - 打包为 EXE 时使用 EXE 同级目录
+        # - 源码运行时使用项目根目录
         try:
-            self.project_root = Path(__file__).resolve().parent.parent
-            self.generated_images_dir = self.project_root / 'generated_images'
-            self.generated_videos_dir = self.project_root / 'generated_videos'
+            def _get_output_base_dir():
+                try:
+                    if getattr(sys, 'frozen', False):
+                        return Path(sys.executable).resolve().parent
+                    return Path(__file__).resolve().parent.parent
+                except Exception:
+                    return Path(os.getcwd())
+
+            self.output_base_dir = _get_output_base_dir()
+            self.generated_images_dir = self.output_base_dir / 'generated_images'
+            self.generated_videos_dir = self.output_base_dir / 'generated_videos'
             self.generated_images_dir.mkdir(parents=True, exist_ok=True)
             self.generated_videos_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"生成图片保存目录: {self.generated_images_dir}")
@@ -793,7 +818,13 @@ class MainWindow(QMainWindow):
             }
         """)
         config_layout.addRow(QLabel("Model:"), self.model_edit)
-        
+
+        # 浏览器无头模式开关（默认开启）
+        self.browser_headless_checkbox = QCheckBox("浏览器无头模式（无界面运行）")
+        self.browser_headless_checkbox.setToolTip("开启后，Playwright 将在无界面模式运行")
+        self.browser_headless_checkbox.setStyleSheet("font-size: 13px;")
+        config_layout.addRow(QLabel("运行模式:"), self.browser_headless_checkbox)
+
         # 图片和视频提示词
         self.settings_image_prompt_edit = QTextEdit()
         self.settings_image_prompt_edit.setMaximumHeight(80)
@@ -1465,7 +1496,7 @@ class MainWindow(QMainWindow):
                 password=account_info['password'],
                 prompt=effective_prompt,
                 image_path=image_path,
-                headless=True,
+                headless=self._get_browser_headless(),
                 account_id=account_info['id']
             ))
             
@@ -1777,7 +1808,7 @@ class MainWindow(QMainWindow):
                         prompt=prompt,
                         seconds=seconds,
                         image_path=image_path,
-                        headless=True,
+                        headless=self._get_browser_headless(),
                         account_id=account_info['id']
                     ))
 
@@ -1899,7 +1930,7 @@ class MainWindow(QMainWindow):
                                     prompt=prompt,
                                     seconds=seconds,
                                     image_path=image_path,
-                                    headless=True,
+                                    headless=self._get_browser_headless(),
                                     account_id=account_info['id']
                                 ))
                                 if result_local.get('success'):
@@ -2122,6 +2153,14 @@ class MainWindow(QMainWindow):
             self.settings_image_prompt_edit.setPlainText(configs.get('image_prompt', ''))
             self.settings_video_prompt_edit.setPlainText(configs.get('video_prompt', ''))
             
+            # 浏览器无头模式
+            headless_val = str(configs.get('browser_headless', '1')).strip().lower()
+            is_headless = headless_val in ('1', 'true', 'yes', 'on')
+            try:
+                self.browser_headless_checkbox.setChecked(is_headless)
+            except Exception:
+                pass
+            
             # 视频时长设置
             video_duration = configs.get('video_duration', '5')
             if video_duration == '10':
@@ -2144,6 +2183,12 @@ class MainWindow(QMainWindow):
             set_config('image_prompt', self.settings_image_prompt_edit.toPlainText())
             set_config('video_prompt', self.settings_video_prompt_edit.toPlainText())
             
+            # 保存浏览器无头模式
+            try:
+                set_config('browser_headless', '1' if self.browser_headless_checkbox.isChecked() else '0')
+            except Exception:
+                pass
+            
             # 保存视频时长
             video_duration = '10' if self.video_duration_10.isChecked() else '5'
             set_config('video_duration', video_duration)
@@ -2159,6 +2204,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "成功", "设置已保存")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存设置失败: {str(e)}")
+    
+    def _get_browser_headless(self) -> bool:
+        """读取数据库中的浏览器无头模式配置并转换为布尔"""
+        try:
+            val = get_config('browser_headless', '1')
+            return str(val).strip().lower() in ('1', 'true', 'yes', 'on')
+        except Exception:
+            return True
             
     def add_account(self):
         """添加账号"""
