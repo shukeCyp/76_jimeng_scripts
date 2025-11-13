@@ -55,7 +55,7 @@ except Exception:
     pass
 
 # 导入现有的模块
-from database import init_database, close_database, logger, get_config, set_config, get_all_configs, add_account, batch_add_accounts, delete_accounts, get_accounts_with_usage, add_record
+from database import init_database, close_database, logger, get_config, set_config, get_all_configs, add_account, batch_add_accounts, delete_accounts, get_accounts_with_usage, add_record, add_keling_account, batch_add_keling_accounts, get_keling_accounts, delete_keling_accounts
 from accounts_utils import get_image_account, get_video_account
 # 导入图片生成工具
 from jimeng_image_util import generate_image
@@ -319,6 +319,73 @@ class BatchAddDialog(QDialog):
         """获取账号数据"""
         return self.accounts_text.toPlainText().split('\n')
 
+class KelingBatchAddDialog(QDialog):
+    """批量添加可灵账号对话框（用户名----密码）"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("批量添加可灵账号")
+        self.setGeometry(200, 200, 500, 400)
+
+        layout = QVBoxLayout(self)
+
+        info_label = QLabel("请输入账号信息，每行一个，格式为 用户名----密码")
+        layout.addWidget(info_label)
+
+        self.accounts_text = QTextEdit()
+        self.accounts_text.setPlaceholderText("例如:\nuser1----password1\nuser2----password2")
+        layout.addWidget(self.accounts_text)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_accounts_data(self):
+        return self.accounts_text.toPlainText().split('\n')
+
+from PyQt6.QtWidgets import QRadioButton, QButtonGroup
+
+class NumberSelectDialog(QDialog):
+    """选择 1-max 的数字对话框"""
+    def __init__(self, title="选择数量", max_number=9, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setGeometry(200, 200, 400, 180)
+        self.max_number = max_number if isinstance(max_number, int) and max_number >= 1 else 9
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(f"请选择一个数字（1-{self.max_number}）"))
+
+        numbers_layout = QHBoxLayout()
+        self.button_group = QButtonGroup(self)
+        for i in range(1, self.max_number + 1):
+            rb = QRadioButton(str(i))
+            if i == 1:
+                rb.setChecked(True)
+            self.button_group.addButton(rb, i)
+            numbers_layout.addWidget(rb)
+        numbers_layout.addStretch()
+        layout.addLayout(numbers_layout)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_selected_number(self) -> int:
+        try:
+            num = int(self.button_group.checkedId())
+            if num < 1:
+                return 1
+            if num > self.max_number:
+                return self.max_number
+            return num
+        except Exception:
+            return 1
 class MainWindow(QMainWindow):
     """主窗口类"""
     image_generated_signal = pyqtSignal(int, str)
@@ -415,6 +482,7 @@ class MainWindow(QMainWindow):
         # 创建各个标签页
         self.create_home_tab()
         self.create_accounts_tab()
+        self.create_keling_accounts_tab()
         self.create_settings_tab()
         
         # 创建状态栏
@@ -498,10 +566,48 @@ class MainWindow(QMainWindow):
             }
         """)
         self.batch_video_btn.clicked.connect(self.batch_generate_videos)
+
+        # 批量选择主图按钮
+        self.batch_select_main_btn = QPushButton("批量选择主图")
+        self.batch_select_main_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffc107;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e0a800;
+            }
+        """)
+        self.batch_select_main_btn.clicked.connect(self.batch_select_main_images)
+
+        # 批量选择模特图按钮
+        self.batch_select_model_btn = QPushButton("批量选择模特图")
+        self.batch_select_model_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #fd7e14;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e96b0c;
+            }
+        """)
+        self.batch_select_model_btn.clicked.connect(self.batch_select_model_images)
         
         control_layout.addWidget(self.import_btn)
         control_layout.addWidget(self.batch_image_btn)
         control_layout.addWidget(self.batch_video_btn)
+        control_layout.addWidget(self.batch_select_main_btn)
+        control_layout.addWidget(self.batch_select_model_btn)
         control_layout.addStretch()
         
         # 文件列表区域 - 占据更多空间
@@ -755,6 +861,269 @@ class MainWindow(QMainWindow):
         except Exception:
             # 兜底直接调用
             self.refresh_accounts()
+
+    def create_keling_accounts_tab(self):
+        """创建可灵账号管理标签页（模仿即梦账号管理：上方按钮+弹窗）"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 控制按钮区域（模仿即梦账号管理）
+        control_group = QGroupBox("可灵账号操作")
+        control_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                margin-top: 1ex;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+            """
+        )
+        control_layout = QHBoxLayout(control_group)
+        control_layout.setSpacing(10)
+
+        self.keling_add_account_btn = QPushButton("添加账号")
+        self.keling_add_account_btn.setStyleSheet(
+            """
+            QPushButton { background-color: #17a2b8; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #138496; }
+            """
+        )
+        self.keling_add_account_btn.clicked.connect(self.keling_add_account)
+
+        self.keling_batch_add_btn = QPushButton("批量添加")
+        self.keling_batch_add_btn.setStyleSheet(
+            """
+            QPushButton { background-color: #007bff; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #0056b3; }
+            """
+        )
+        self.keling_batch_add_btn.clicked.connect(self.keling_batch_add_accounts)
+
+        self.keling_delete_account_btn = QPushButton("删除选中")
+        self.keling_delete_account_btn.setStyleSheet(
+            """
+            QPushButton { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #c82333; }
+            """
+        )
+        self.keling_delete_account_btn.clicked.connect(self.keling_delete_selected_accounts)
+
+        self.keling_refresh_btn = QPushButton("刷新列表")
+        self.keling_refresh_btn.setStyleSheet(
+            """
+            QPushButton { background-color: #28a745; color: white; border: none; border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #1e7e34; }
+            """
+        )
+        self.keling_refresh_btn.clicked.connect(self.keling_refresh_accounts)
+
+        self.keling_select_all_checkbox = QCheckBox("全选")
+        self.keling_select_all_checkbox.setToolTip("选择/取消选择所有可灵账号")
+        self.keling_select_all_checkbox.stateChanged.connect(self.keling_on_select_all_toggled)
+
+        control_layout.addWidget(self.keling_add_account_btn)
+        control_layout.addWidget(self.keling_batch_add_btn)
+        control_layout.addWidget(self.keling_delete_account_btn)
+        control_layout.addWidget(self.keling_refresh_btn)
+        control_layout.addWidget(self.keling_select_all_checkbox)
+        control_layout.addStretch()
+
+        # 列表区域
+        list_group = QGroupBox("可灵账号列表")
+        list_group.setStyleSheet(
+            """
+            QGroupBox { font-weight: bold; border: 1px solid #dee2e6; border-radius: 8px; margin-top: 1ex; padding-top: 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px 0 5px; }
+            """
+        )
+        list_layout = QVBoxLayout(list_group)
+        list_layout.setContentsMargins(10, 10, 10, 10)
+
+        self.keling_accounts_table = QTableWidget(0, 5)
+        self.keling_accounts_table.setHorizontalHeaderLabels(["选择", "ID", "用户名", "密码", "添加时间"])
+        header = self.keling_accounts_table.horizontalHeader()
+        if header is not None:
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        v_header = self.keling_accounts_table.verticalHeader()
+        if v_header is not None:
+            v_header.setVisible(False)
+        self.keling_accounts_table.setAlternatingRowColors(True)
+        self.keling_accounts_table.setStyleSheet(
+            """
+            QTableWidget { gridline-color: #dee2e6; border: 1px solid #dee2e6; border-radius: 4px; }
+            QTableWidget::item { padding: 8px; }
+            QTableWidget::item:selected { background-color: #cce5ff; }
+            QHeaderView::section { background-color: #e9ecef; color: #495057; padding: 10px; font-weight: bold; border: 1px solid #dee2e6; }
+            """
+        )
+
+        header = self.keling_accounts_table.horizontalHeader()
+        if header is not None:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.keling_accounts_table.setColumnWidth(0, 60)
+        self.keling_accounts_table.setColumnWidth(1, 80)
+        self.keling_accounts_table.setColumnWidth(3, 120)
+        self.keling_accounts_table.setColumnWidth(4, 160)
+
+        list_layout.addWidget(self.keling_accounts_table)
+
+        # 组装布局
+        layout.addWidget(control_group)
+        layout.addWidget(list_group)
+
+        # 添加到标签页
+        self.tab_widget.addTab(widget, "可灵账号管理")
+
+        # 初次加载列表
+        try:
+            QTimer.singleShot(0, self.keling_refresh_accounts)
+        except Exception:
+            self.keling_refresh_accounts()
+
+    def keling_refresh_accounts(self):
+        """刷新可灵账号列表"""
+        try:
+            accounts = get_keling_accounts()
+            self.keling_accounts_table.setRowCount(len(accounts))
+            for row, acc in enumerate(accounts):
+                # 选择复选框
+                checkbox = QCheckBox()
+                self.keling_accounts_table.setCellWidget(row, 0, checkbox)
+
+                # 填充数据列
+                self.keling_accounts_table.setItem(row, 1, QTableWidgetItem(str(acc.get('id', ''))))
+                self.keling_accounts_table.setItem(row, 2, QTableWidgetItem(acc.get('username', ''))) 
+                self.keling_accounts_table.setItem(row, 3, QTableWidgetItem(acc.get('password', ''))) 
+                self.keling_accounts_table.setItem(row, 4, QTableWidgetItem(str(acc.get('created_at', ''))))
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"刷新可灵账号列表失败: {e}")
+
+    def keling_add_account(self):
+        """添加可灵账号：弹窗输入用户名与密码"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("添加可灵账号")
+        dialog.setGeometry(200, 200, 400, 200)
+
+        layout = QVBoxLayout(dialog)
+
+        # 用户名输入
+        username_layout = QHBoxLayout()
+        username_layout.addWidget(QLabel("用户名:"))
+        username_edit = QLineEdit()
+        username_layout.addWidget(username_edit)
+        layout.addLayout(username_layout)
+
+        # 密码输入
+        password_layout = QHBoxLayout()
+        password_layout.addWidget(QLabel("密码:"))
+        password_edit = QLineEdit()
+        password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        password_layout.addWidget(password_edit)
+        layout.addLayout(password_layout)
+
+        # 按钮
+        button_layout = QHBoxLayout()
+        ok_btn = QPushButton("确定")
+        cancel_btn = QPushButton("取消")
+        button_layout.addWidget(ok_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addLayout(button_layout)
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            username = username_edit.text().strip()
+            password = password_edit.text()
+            if username:
+                result = add_keling_account(username, password)
+                if result.get('success'):
+                    status_bar = self.statusBar()
+                    if status_bar is not None:
+                        status_bar.showMessage("可灵账号添加成功")
+                    self.keling_refresh_accounts()
+                    QMessageBox.information(self, "成功", "账号添加成功")
+                else:
+                    QMessageBox.critical(self, "错误", f"账号添加失败: {result.get('error')}")
+            else:
+                QMessageBox.warning(self, "警告", "请输入用户名")
+
+    def keling_batch_add_accounts(self):
+        """批量添加可灵账号：弹窗输入，每行 username----password"""
+        dialog = KelingBatchAddDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            accounts_data = dialog.get_accounts_data()
+            if accounts_data and any(line.strip() for line in accounts_data):
+                result = batch_add_keling_accounts(accounts_data)
+                if result.get('success'):
+                    status_bar = self.statusBar()
+                    if status_bar is not None:
+                        status_bar.showMessage(f"批量添加可灵账号完成: 成功{result['added_count']}个，失败{result['failed_count']}个")
+                    self.keling_refresh_accounts()
+                    QMessageBox.information(self, "成功", f"批量添加账号完成: 成功{result['added_count']}个，失败{result['failed_count']}个")
+                else:
+                    QMessageBox.critical(self, "错误", f"批量添加可灵账号失败: {result.get('error')}")
+            else:
+                QMessageBox.warning(self, "警告", "请输入账号信息")
+
+    def keling_delete_selected_accounts(self):
+        """删除选中的可灵账号"""
+        selected_ids = []
+        for row in range(self.keling_accounts_table.rowCount()):
+            checkbox = self.keling_accounts_table.cellWidget(row, 0)
+            if checkbox and isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                item = self.keling_accounts_table.item(row, 1)
+                if item:
+                    try:
+                        selected_ids.append(int(item.text()))
+                    except Exception:
+                        pass
+
+        if selected_ids:
+            reply = QMessageBox.question(
+                self,
+                "确认",
+                f"确定要删除选中的 {len(selected_ids)} 个可灵账号吗？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                result = delete_keling_accounts(selected_ids)
+                if result.get('success'):
+                    status_bar = self.statusBar()
+                    if status_bar is not None:
+                        status_bar.showMessage(f"成功删除 {result['deleted_count']} 个可灵账号")
+                    self.keling_refresh_accounts()
+                else:
+                    QMessageBox.critical(self, "错误", f"删除账号失败: {result.get('error')}")
+        else:
+            QMessageBox.warning(self, "警告", "请选择要删除的账号")
+
+    def keling_on_select_all_toggled(self, _state):
+        """全选/取消全选 可灵账号列表中的复选框"""
+        try:
+            check = bool(self.keling_select_all_checkbox.isChecked())
+        except Exception:
+            check = False
+        try:
+            for row in range(self.keling_accounts_table.rowCount()):
+                widget = self.keling_accounts_table.cellWidget(row, 0)
+                if widget and isinstance(widget, QCheckBox):
+                    widget.setChecked(check)
+        except Exception:
+            pass
         
     def create_settings_tab(self):
         """创建设置标签页"""
@@ -1328,6 +1697,101 @@ class MainWindow(QMainWindow):
                                 pixmap = pixmap.scaled(130, 130, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                                 image_label.setPixmap(pixmap)
                                 image_label.image_path = selected_image
+
+    def batch_select_main_images(self):
+        """批量选择主图：根据选择的序号为所有项目设置主图，超出则选择最后一张"""
+        dialog = NumberSelectDialog(title="批量选择主图", parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            number = dialog.get_selected_number()
+            updated = 0
+            try:
+                for row in range(len(self.current_files)):
+                    info = self.current_files[row]
+                    folder_path = info.get('folder_path')
+                    if not folder_path or not os.path.isdir(folder_path):
+                        continue
+                    image_files = []
+                    for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.gif', '*.webp']:
+                        pattern = os.path.join(folder_path, ext)
+                        image_files.extend(glob.glob(pattern))
+                    if not image_files:
+                        continue
+                    image_files = sorted(image_files)
+                    idx = min(number, len(image_files)) - 1
+                    selected_image = image_files[idx]
+                    self.current_files[row]['main_image'] = selected_image
+                    main_image_widget = self.files_table.cellWidget(row, 0)
+                    if main_image_widget:
+                        layout = main_image_widget.layout()
+                        if layout and layout.count() > 0:
+                            item = layout.itemAt(0)
+                            if item and item.widget():
+                                image_label = item.widget()
+                                if os.path.exists(selected_image):
+                                    pixmap = QPixmap(selected_image)
+                                    pixmap = pixmap.scaled(130, 130, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                                    image_label.setPixmap(pixmap)
+                                    try:
+                                        image_label.image_path = selected_image
+                                    except Exception:
+                                        pass
+                    updated += 1
+            except Exception:
+                pass
+            status_bar = self.statusBar()
+            if status_bar is not None:
+                status_bar.showMessage(f"批量选择主图完成，更新 {updated} 行")
+            QMessageBox.information(self, "完成", f"已为 {updated} 个项目设置主图")
+
+    def batch_select_model_images(self):
+        """批量选择模特图：选择每行已生成图片中的第N张，超出则选择最后一张"""
+        dialog = NumberSelectDialog(title="批量选择模特图", max_number=4, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            number = dialog.get_selected_number()
+            updated = 0
+            try:
+                for row in range(len(self.current_files)):
+                    model_widget = self.files_table.cellWidget(row, 1)
+                    if not model_widget:
+                        continue
+                    layout = model_widget.layout()
+                    if not layout:
+                        continue
+
+                    filled_labels = []
+                    for i in range(layout.count()):
+                        it = layout.itemAt(i)
+                        if it and it.widget():
+                            lbl = it.widget()
+                            if isinstance(lbl, QLabel):
+                                pix = lbl.pixmap()
+                                if pix is not None and not getattr(pix, 'isNull', lambda: True)():
+                                    filled_labels.append(lbl)
+                    if not filled_labels:
+                        continue
+
+                    idx = min(number, len(filled_labels)) - 1
+                    target_label = filled_labels[idx]
+
+                    for i in range(layout.count()):
+                        it = layout.itemAt(i)
+                        if it and it.widget():
+                            self._set_model_label_selected(it.widget(), False)
+                    self._set_model_label_selected(target_label, True)
+
+                    image_path = getattr(target_label, 'image_path', None)
+                    if image_path and os.path.exists(image_path):
+                        self.current_files[row]['selected_model_image'] = image_path
+                    else:
+                        self.current_files[row]['selected_model_image'] = None
+                    self._update_video_button_state(row)
+                    updated += 1
+            except Exception as e:
+                logger.error(f"批量选择模特图失败: {e}")
+            status_bar = self.statusBar()
+            if status_bar is not None:
+                status_bar.showMessage(f"批量选择模特图完成，更新 {updated} 行")
+            QMessageBox.information(self, "完成", f"已为 {updated} 个项目设置模特图")
 
     def generate_image(self, row, button):
         """生成图片"""

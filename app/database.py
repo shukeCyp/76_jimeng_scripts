@@ -177,6 +177,13 @@ class JimengRecord(BaseModel):
     created_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
 
+# 可灵账号模型（独立于 JimengAccount）
+class KelingAccount(BaseModel):
+    username = CharField(unique=True)
+    password = CharField()
+    created_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+
+
 def init_database():
     """初始化数据库"""
     try:
@@ -349,6 +356,99 @@ def batch_add_accounts(accounts_data):
         logger.error(f"批量添加账号失败: {e}")
         return {'success': False, 'error': str(e)}
 
+
+# ======================== 可灵账号管理 ========================
+def add_keling_account(username, password=None):
+    """添加可灵账号"""
+    try:
+        account = KelingAccount.create(
+            username=username,
+            password=password or ''
+        )
+        logger.info(f"可灵账号添加成功: {username}")
+        return {'success': True, 'account_id': account.id}
+    except Exception as e:
+        logger.error(f"添加可灵账号失败: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def batch_add_keling_accounts(accounts_data):
+    """批量添加可灵账号，行格式：username----password"""
+    try:
+        added_accounts = []
+        failed_accounts = []
+
+        for account_line in accounts_data:
+            account_line = account_line.strip()
+            if not account_line:
+                continue
+
+            if '----' not in account_line:
+                failed_accounts.append(account_line)
+                logger.warning(f"可灵账号格式不正确，跳过: {account_line}")
+                continue
+
+            parts = account_line.split('----')
+            if len(parts) < 2:
+                failed_accounts.append(account_line)
+                logger.warning(f"可灵账号格式不正确，跳过: {account_line}")
+                continue
+
+            username = parts[0].strip()
+            password = parts[1].strip() if len(parts) >= 2 else ''
+            if not username:
+                failed_accounts.append(account_line)
+                logger.warning(f"可灵用户名为空，跳过: {account_line}")
+                continue
+
+            try:
+                account = KelingAccount.create(username=username, password=password)
+                added_accounts.append(account.id)
+                logger.info(f"可灵账号添加成功: {username}")
+            except IntegrityError:
+                failed_accounts.append(username)
+                logger.warning(f"可灵账号已存在，跳过: {username}")
+            except Exception as e:
+                failed_accounts.append(username)
+                logger.error(f"添加可灵账号失败 {username}: {e}")
+
+        return {
+            'success': True,
+            'added_count': len(added_accounts),
+            'failed_count': len(failed_accounts),
+            'added_accounts': added_accounts,
+            'failed_accounts': failed_accounts
+        }
+    except Exception as e:
+        logger.error(f"批量添加可灵账号失败: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def get_keling_accounts():
+    """获取所有可灵账号列表"""
+    try:
+        accounts = []
+        for acc in KelingAccount.select().order_by(KelingAccount.id.desc()):
+            accounts.append({
+                'id': acc.id,
+                'username': acc.username,
+                'password': acc.password,
+                'created_at': acc.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
+        return accounts
+    except Exception as e:
+        logger.error(f"获取可灵账号列表失败: {e}")
+        return []
+
+def delete_keling_accounts(account_ids):
+    """删除指定ID的可灵账号"""
+    try:
+        deleted_count = KelingAccount.delete().where(KelingAccount.id.in_(account_ids)).execute()
+        logger.info(f"成功删除 {deleted_count} 个可灵账号")
+        return {'success': True, 'deleted_count': deleted_count}
+    except Exception as e:
+        logger.error(f"删除可灵账号失败: {e}")
+        return {'success': False, 'error': str(e)}
 
 def delete_accounts(account_ids):
     """删除指定ID的账号"""

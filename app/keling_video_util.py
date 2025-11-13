@@ -2,7 +2,10 @@ import asyncio
 import sys
 import json
 import time
+import threading
 from playwright.async_api import async_playwright
+import requests
+from proxy_manager import get_one_proxy
 
 async def gen_video_from_images(
     username,
@@ -18,25 +21,50 @@ async def gen_video_from_images(
     :param prompt_text: 用于生成视频的提示词。
     :param headless: 是否以无头模式运行浏览器。
     """
+    # 仅接口请求走代理，页面资源等不走代理
+    proxy = get_one_proxy()
+
+    print(f"当前代理: {proxy}")
+    # 当代理为 None 或空字符串时，不传入 proxy 参数
+    launch_kwargs = {
+        "headless": False,
+        "args": [
+            "--start-maximized"
+        ]
+    }
+    if proxy:
+        # 同时支持 http 和 https 代
+        # launch_kwargs["proxy"] = {"server": f"http://{proxy}"}
+        pass
+
     async with async_playwright() as p:
-        # 启动浏览器
+        # 启动浏览器，非接口流量直连
         print("启动浏览器...")
-        browser = await p.chromium.launch(
-            headless=False,
-            args=["--start-maximized"]
-        )
-        context = await browser.new_context(no_viewport=True)
-        page = await context.new_page()
+        browser = await p.chromium.launch(**launch_kwargs)
+        # 页面浏览使用无代理上下文
+        page_context = await browser.new_context(no_viewport=True)
+        # 后续所有页面操作使用 page_context
+        page = await page_context.new_page()
+        # 直接写入 localStorage，用于关闭引导弹窗，不等待页面加载完毕
+        await page.goto("https://app.klingai.com/global/image-to-video/frame-mode/new?ra=4", wait_until="domcontentloaded")
+        
+        ts1 = int(time.time() * 1000)
+        ts2 = ts1 + 1
+        await page.evaluate(f"""
+            if (window.localStorage) {{
+                localStorage.setItem('overlay-manage__guide__image-to-video-by-frame', '{ts1}');
+                localStorage.setItem('overlay-manage__guide__digital-human', '{ts2}');
+            }}
+        """)
+        print(f"已向 localStorage 写入时间戳: {ts1}, {ts2}")
 
         # 初始化监听器变量
         task_id = None
         video_url = None
         generation_completed = False
-        
         # 设置响应监听器
         async def handle_response(response):
             nonlocal task_id, video_url, generation_completed
-            print(f"[监听器] 捕获响应 URL: {response.url}")
             if "api/task/submit" in response.url:
                 try:
                     data = await response.json()
@@ -93,17 +121,8 @@ async def gen_video_from_images(
         print("已注册响应监听器")
 
         print("浏览器启动成功，窗口已全屏")
-        await page.goto("https://app.klingai.com/global/")
+        await page.goto("https://app.klingai.com/global/image-to-video/frame-mode/new?ra=4", timeout=60000)
         print("已跳转至首页")
-
-        # 等待并关闭可能出现的弹窗（10秒内）
-        try:
-            print("等待并尝试关闭首页弹窗...")
-            close_btn = await page.wait_for_selector('div.close.all-center', timeout=10000)
-            await close_btn.click()
-            print("已关闭弹窗")
-        except:
-            print("首页弹窗未出现，继续")
 
         # 点击“Sign In”按钮
         print("等待 Sign In 按钮...")
@@ -136,45 +155,9 @@ async def gen_video_from_images(
         print("已点击登录按钮")
         # 等待登录完成并跳转到 image-to-video 页面
         await page.wait_for_load_state("networkidle")
-        print("页面 networkidle，准备跳转 image-to-video")
-        await page.goto("https://app.klingai.com/global/image-to-video/frame-mode/new")
+        
         print("已跳转到 image-to-video 页面")
-
-        # 检测并关闭可能出现的“Multi-Reference Model Update”弹窗
-        try:
-            print("等待 Multi-Reference Model Update 弹窗...")
-            await page.wait_for_selector('div.el-dialog__header:has-text("Kling AI Image Generation: Multi-Reference Model Update Release Note")', timeout=10000)
-            close_btn = await page.query_selector('button.el-dialog__headerbtn[aria-label="Close this dialog"]')
-            if close_btn:
-                await close_btn.click()
-                print("已关闭 Multi-Reference Model Update 弹窗")
-        except:
-            print("Multi-Reference Model Update 弹窗未出现")
-
-        # 检测并关闭“Lip Sync is now upgraded to Avatar”引导弹窗
-        try:
-            print("等待 Lip Sync 升级提示弹窗...")
-            await page.wait_for_selector('div.mark-step:has-text("Lip Sync is now upgraded to Avatar")', timeout=10000)
-            box = await page.bounding_box()
-            x = box['width'] / 2
-            y = box['height'] / 2
-            await page.mouse.click(x, y)
-            print("已点击屏幕正中间关闭 Lip Sync 升级提示弹窗")
-        except:
-            print("Lip Sync 升级提示弹窗未出现")
-
-        # 检测并关闭“DeepSeek now supports image input”引导弹窗
-        try:
-            print("等待 DeepSeek 图像输入提示弹窗...")
-            await page.wait_for_selector('div.mark-step:has-text("DeepSeek now supports image input")', timeout=10000)
-            box = await page.bounding_box()
-            x = box['width'] / 2
-            y = box['height'] / 2
-            await page.mouse.click(x, y)
-            print("已点击屏幕正中间关闭 DeepSeek 图像输入提示弹窗")
-        except:
-            print("DeepSeek 图像输入提示弹窗未出现")
-
+        
         # 短暂等待页面稳定
         print("等待页面稳定 2 秒...")
         await asyncio.sleep(2)
@@ -259,9 +242,9 @@ async def gen_video_from_images(
 def main():
     print("主函数开始")
     asyncio.run(gen_video_from_images(
-        username="AshleyGuzman1703@hotmail.com",
-        password="mpepc4490",
-        image_path="c:\\Users\\35368\\Desktop\\保健品.jpeg",
+        username="JustinPerez7019@hotmail.com",
+        password="nuhhvneu61490",
+        image_path="c:\\Users\\35368\\Desktop\\d4d9cd1b71568fd8fb798abd8f9eee6c.jpg",
         prompt_text="A beautiful sunset over the mountains"
     ))
     print("主函数结束")
